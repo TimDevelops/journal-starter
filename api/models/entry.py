@@ -1,9 +1,20 @@
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 AnalysisText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+
+# Task 2: Reusable constrained string type for Entry fields
+EntryText = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=1,
+        max_length=256,
+        strict=True,
+    ),
+]
 
 
 class AnalysisResponse(BaseModel):
@@ -28,47 +39,35 @@ class AnalysisResponse(BaseModel):
 
 
 class EntryCreate(BaseModel):
-    """Model for creating a new journal entry (user input).
+    """Model for creating a new journal entry (user input)."""
 
-    TODO (Task 2): Add validation so that ``work``, ``struggle``, and ``intention``:
-      - reject empty strings and whitespace-only input
-      - strip surrounding whitespace
-      - have a max length of 256 characters
-
-    Hint: wrap the field type in ``Annotated[str, StringConstraints(...)]``.
-    See https://docs.pydantic.dev/latest/concepts/types/#constrained-types
-    """
-
-    work: str = Field(
-        max_length=256,
+    work: EntryText = Field(
         description="What did you work on today?",
         json_schema_extra={"example": "Studied FastAPI and built my first API endpoints"},
     )
-    struggle: str = Field(
-        max_length=256,
+    struggle: EntryText = Field(
         description="What's one thing you struggled with today?",
         json_schema_extra={"example": "Understanding async/await syntax and when to use it"},
     )
-    intention: str = Field(
-        max_length=256,
+    intention: EntryText = Field(
         description="What will you study/work on tomorrow?",
         json_schema_extra={"example": "Practice PostgreSQL queries and database design"},
     )
 
 
-# TODO (Task 2): Define an ``EntryUpdate`` model for PATCH /entries/{entry_id}.
-#
-# Requirements:
-#   - All three fields (``work``, ``struggle``, ``intention``) may be omitted.
-#     Omitted fields default to None internally; explicit JSON null is invalid.
-#   - Each field, when provided, must follow the same validation rules as
-#     ``EntryCreate`` (non-empty, whitespace-stripped, max 256 chars).
-#   - An empty update is allowed and leaves the entry's text fields unchanged.
-#
-# Once defined, import ``EntryUpdate`` in ``api/routers/journal_router.py``
-# and use it as the type of the PATCH endpoint's request body. Pass only
-# explicitly supplied fields to the service with model_dump(exclude_unset=True).
-# Hint: a field_validator can reject explicit None without rejecting omitted fields.
+class EntryUpdate(BaseModel):
+    """Model for updating an existing journal entry (user input)."""
+
+    work: EntryText | None = None
+    struggle: EntryText | None = None
+    intention: EntryText | None = None
+
+    @field_validator("work", "struggle", "intention", mode="before")
+    @classmethod
+    def reject_explicit_none(cls, value: str | None) -> str | None:
+        if value is None:
+            raise ValueError("Explicit null is invalid")
+        return value
 
 
 class Entry(BaseModel):
